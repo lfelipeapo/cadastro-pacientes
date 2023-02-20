@@ -1,4 +1,4 @@
-# Docker + PHP + Nginx + Postgres + Redis
+# Cadastro de Pacientes
 Projeto desenvolvido com Laravel como Back End e Vue Js Front End
 # Usada Imagem Docker PHP com Nginx pré-configurada
 [Ver imagem no Docker Hub](https://hub.docker.com/repository/docker/lfelipeapo/php-nginx-web/general)
