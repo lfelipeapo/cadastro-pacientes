@@ -15,6 +15,8 @@ Agora é hora de ajustarmos nossas aplicações dentro do ambiente.
 
 Acesse o terminal da pasta raiz do projeto e rode o comando sh script-start-docker-compose.sh
 
+Caso a porta da aplicação já esteja sendo utilizada por outra aplicação Docker, utilizar o script script-drop-container.sh para derrubar a aplicação que está usando a porta selecionada.
+
 Para acessar o ambiente digite em seu navegador e acesse:
 
 http://localhost
