@@ -91,23 +91,45 @@ class Validator
      * @param  string  $number
      * @return bool
      */
-    public function validateCPF(string $number):bool
+    public function validateCPF($cpf)
     {
-        $cpf = preg_replace('/[^0-9]/', "", $number);
+        $cpf = preg_replace('/\D/', '', $cpf);
 
-        if (strlen($cpf) != 11 || preg_match('/([0-9])\1{10}/', $cpf)) {
+        // verificar se tem 11 dígitos
+        if (strlen($cpf) !== 11) {
             return false;
         }
 
-        for ($i = 9; $i < 11; $i++) {
-            $sum = 0;
-            for ($j = 0; $j < $i; $j++) {
-                $sum += $cpf[$j] * ($i + 1 - $j);
-            }
-            $result = (($sum * 10) % 11);
-            if ($cpf[$i] != $result) {
-                return false;
-            }
+        // verificar se todos os dígitos são iguais
+        if (preg_match('/^(\d)\1+$/', $cpf)) {
+            return false;
         }
+
+        // calcular o primeiro dígito verificador
+        $sum = 0;
+        for ($i = 0; $i < 9; $i++) {
+            $sum += (10 - $i) * intval($cpf[$i]);
+        }
+        $digit = ($sum % 11 < 2) ? 0 : 11 - ($sum % 11);
+
+        // verificar o primeiro dígito verificador
+        if (intval($cpf[9]) !== $digit) {
+            return false;
+        }
+
+        // calcular o segundo dígito verificador
+        $sum = 0;
+        for ($i = 0; $i < 10; $i++) {
+            $sum += (11 - $i) * intval($cpf[$i]);
+        }
+        $digit = ($sum % 11 < 2) ? 0 : 11 - ($sum % 11);
+
+        // verificar o segundo dígito verificador
+        if (intval($cpf[10]) !== $digit) {
+            return false;
+        }
+
+        // CPF é válido
+        return true;
     }
 }

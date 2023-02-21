@@ -31,4 +31,8 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    'viacep' => [
+        'url' => 'https://viacep.com.br/ws/',
+    ],
+
 ];

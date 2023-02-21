@@ -22,12 +22,15 @@ class PacienteController extends Controller
         $search = $request->input('search');
         $pacientes = Paciente::with('endereco')
         ->where(function ($query) use ($search) {
-            $query->where('nome', 'like', "%$search%")
+            $query->where('nome_completo', 'like', "%$search%")
             ->orWhere('cns', 'like', "%$search%");
         })
+            ->orderBy('nome_completo')
             ->paginate(10);
 
-        return view('pacientes.index', compact('pacientes'));
+        return response()->json([
+            'data' => $pacientes,
+        ]);
     }
 
     /**
