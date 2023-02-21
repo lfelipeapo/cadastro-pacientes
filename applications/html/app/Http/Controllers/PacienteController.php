@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\ProcessarImportacaoPacientes;
 use App\Models\Paciente;
 use App\Models\Endereco;
 use App\Helpers\Validator;
+use App\Jobs\ProcessarImportacaoPacientes\ProcessarImportacaoPacientes as ProcessarImportacaoPacientesProcessarImportacaoPacientes;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -134,6 +136,33 @@ class PacienteController extends Controller
     }
 
     /**
+     * Importes determinated patient.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    public function import(Request $request)
+    {
+        // Verifica se foi enviado um arquivo no corpo da requisição
+        if (!$request->hasFile('arquivo')) {
+            return response()->json(['message' => 'Nenhum arquivo enviado'], 400);
+        }
+
+        // Verifica se o arquivo enviado é um arquivo CSV válido
+        $arquivo = $request->file('arquivo');
+        if (!$arquivo->isValid() || $arquivo->getClientOriginalExtension() !== 'csv') {
+            return response()->json(['message' => 'Arquivo inválido'], 400);
+        }
+
+        // Coloca a importação na fila
+        ProcessarImportacaoPacientes::dispatch($arquivo);
+
+        // Retorna uma mensagem de sucesso
+        return response()->json(['message' => 'Importação de pacientes em andamento'], 202);
+    }
+
+
+    /**
      * Update the specified resource in storage.
      *
      * @param  \Illuminate\Http\Request  $request
@@ -176,7 +205,7 @@ class PacienteController extends Controller
             ],
             'foto' => 'nullable|image|max:2048',
             'cep' => 'required|string',
-            'endereco' => 'required|string',
+            'logradouro' => 'required|string',
             'numero' => 'required|string',
             'complemento' => 'nullable|string',
             'bairro' => 'required|string',
