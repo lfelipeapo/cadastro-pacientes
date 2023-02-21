@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Paciente;
 use App\Models\Endereco;
+use App\Helpers\Validator;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
@@ -20,15 +21,13 @@ class PacienteController extends Controller
     {
         $search = $request->input('search');
         $pacientes = Paciente::with('endereco')
-        ->where('nome_completo', 'ilike', "%$search%")
-        ->orWhere('cpf', 'ilike', "%$search%")
-        ->orWhere('cns', 'ilike', "%$search%")
-        ->orderBy('nome_completo')
-        ->paginate(10);
+        ->where(function ($query) use ($search) {
+            $query->where('nome', 'like', "%$search%")
+            ->orWhere('cns', 'like', "%$search%");
+        })
+            ->paginate(10);
 
-        return response()->json([
-            'data' => $pacientes,
-        ]);
+        return view('pacientes.index', compact('pacientes'));
     }
 
     /**
@@ -55,6 +54,30 @@ class PacienteController extends Controller
             'foto' => 'nullable|image|max:10240',
         ]);
 
+        $cns = $request->input('cns');
+        $cpf = $request->input('cpf');
+        $validator = new Validator;
+
+        // Validação de CPF
+
+        if (!$validator->validateCPF($cpf)) {
+            return response()->json(['error' => 'CPF inválido.'], 422);
+        }
+
+        // Validação de CNS
+
+        if (substr($cns, 0, 1) == '1' || substr($cns, 0, 1) == '2') {
+            $valido = $validator->validaCns($cns);
+        } elseif (substr($cns, 0, 1) == '7' || substr($cns, 0, 1) == '8' || substr($cns, 0, 1) == '9') {
+            $valido = $validator->validaCnsProv($cns);
+        } else {
+            $valido = false;
+        }
+
+        if (!$valido) {
+            return response()->json(['error' => 'CNS inválido.'], 422);
+        }
+
         $endereco = Endereco::create([
             'cep' => $request->input('endereco_cep'),
             'logradouro' => $request->input('endereco_logradouro'),
@@ -75,8 +98,8 @@ class PacienteController extends Controller
             'nome_completo' => $request->input('nome_completo'),
             'nome_mae' => $request->input('nome_mae'),
             'data_nascimento' => $request->input('data_nascimento'),
-            'cpf' => $request->input('cpf'),
-            'cns' => $request->input('cns'),
+            'cpf' => $cpf,
+            'cns' => $cns,
             'endereco_id' => $endereco->id,
             'foto_url' => $url ?? null,
         ]);
@@ -131,12 +154,22 @@ class PacienteController extends Controller
                 'string',
                 'size:11',
                 Rule::unique('pacientes')->ignore($paciente->id),
+                function (Validator $validator, $value, $fail) {
+                    if (!$validator->validateCPF($value)) {
+                        $fail('O CPF informado é inválido.');
+                    }
+                }
             ],
             'cns' => [
                 'required',
                 'string',
                 'size:15',
                 Rule::unique('pacientes')->ignore($paciente->id),
+                function (Validator $validator, $value, $fail) {
+                    if (!$validator->validaCns($value) && !$validator->validaCnsProv($value)) {
+                        $fail('O CNS informado é inválido.');
+                    }
+                }
             ],
             'foto' => 'nullable|image|max:2048',
             'cep' => 'required|string',
