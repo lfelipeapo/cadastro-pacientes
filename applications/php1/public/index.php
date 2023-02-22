@@ -57,3 +57,8 @@ if ($redis->ping()) {
 }else{
     die('Erro de conexão ao Redis');
 }
+if (extension_loaded('gd') && function_exists('gd_info')) {
+    echo 'A extensão GD está instalada e ativada em seu sistema.';
+} else {
+    echo 'A extensão GD não está instalada e/ou ativada em seu sistema.';
+}

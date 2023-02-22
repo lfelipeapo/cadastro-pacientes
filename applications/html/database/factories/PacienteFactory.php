@@ -2,8 +2,9 @@
 
 namespace Database\Factories;
 
-use App\Helpers\Validator;
+use App\Helpers\Validate;
 use App\Models\Paciente;
+use App\Models\Endereco;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 
@@ -13,7 +14,7 @@ class PacienteFactory extends Factory
 
     public function definition()
     {
-        $validator = new Validator();
+        $validator = new Validate();
 
         $cpf = $this->faker->unique()->numerify('###########');
 
@@ -29,11 +30,11 @@ class PacienteFactory extends Factory
 
         return [
             'nome_completo' => $this->faker->name(),
-            'nome_completo_mae' => $this->faker->name(),
+            'nome_mae' => $this->faker->name(),
             'data_nascimento' => $this->faker->date(),
             'cpf' => $cpf,
             'cns' => $cns,
-            'endereco_id' => null,
+            'endereco_id' => Endereco::factory(),
         ];
     }
 }

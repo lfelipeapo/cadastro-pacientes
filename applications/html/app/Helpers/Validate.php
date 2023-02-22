@@ -2,8 +2,7 @@
 
 namespace App\Helpers;
 
-
-class Validator
+class Validate
 {
 
     /**

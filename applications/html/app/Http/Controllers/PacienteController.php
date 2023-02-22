@@ -5,12 +5,11 @@ namespace App\Http\Controllers;
 use App\Jobs\ProcessarImportacaoPacientes;
 use App\Models\Paciente;
 use App\Models\Endereco;
-use App\Helpers\Validator;
-use App\Jobs\ProcessarImportacaoPacientes\ProcessarImportacaoPacientes as ProcessarImportacaoPacientesProcessarImportacaoPacientes;
+use App\Helpers\Validate;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Validator;
 
 class PacienteController extends Controller
 {
@@ -23,10 +22,10 @@ class PacienteController extends Controller
     {
         $search = $request->input('search');
         $pacientes = Paciente::with('endereco')
-        ->where(function ($query) use ($search) {
-            $query->where('nome_completo', 'like', "%$search%")
-            ->orWhere('cns', 'like', "%$search%");
-        })
+            ->where(function ($query) use ($search) {
+                $query->where('nome_completo', 'like', "%$search%")
+                    ->orWhere('cns', 'like', "%$search%");
+            })
             ->orderBy('nome_completo')
             ->paginate(10);
 
@@ -43,12 +42,13 @@ class PacienteController extends Controller
      */
     public function store(Request $request)
     {
-        $request->validate([
+
+        $validation = Validator::make($request->all(), [
             'nome_completo' => 'required|string|max:255',
             'nome_mae' => 'required|string|max:255',
             'data_nascimento' => 'required|date',
-            'cpf' => 'required|string|unique:pacientes,cpf|max:11',
-            'cns' => 'required|string|unique:pacientes,cns|max:15',
+            'cpf' => 'required|string|max:11|unique:pacientes,cpf',
+            'cns' => 'required|string|max:15|unique:pacientes,cns',
             'endereco_cep' => 'required|string|max:8',
             'endereco_logradouro' => 'required|string|max:255',
             'endereco_numero' => 'required|string|max:20',
@@ -57,20 +57,25 @@ class PacienteController extends Controller
             'endereco_cidade' => 'required|string|max:255',
             'endereco_estado' => 'required|string|max:2',
             'foto' => 'nullable|image|max:10240',
+        ], [
+            'cpf.unique' => 'Já existe um paciente cadastrado com o CPF informado',
+            'cns.unique' => 'Já existe um paciente cadastrado com o CNS informado',
         ]);
+
+        if ($validation->fails()) {
+            return response()->json(['errors' => $validation->errors()], 422);
+        }
 
         $cns = $request->input('cns');
         $cpf = $request->input('cpf');
-        $validator = new Validator;
+        $validator = new Validate();
 
         // Validação de CPF
-
         if (!$validator->validateCPF($cpf)) {
             return response()->json(['error' => 'CPF inválido.'], 422);
         }
 
         // Validação de CNS
-
         if (substr($cns, 0, 1) == '1' || substr($cns, 0, 1) == '2') {
             $valido = $validator->validaCns($cns);
         } elseif (substr($cns, 0, 1) == '7' || substr($cns, 0, 1) == '8' || substr($cns, 0, 1) == '9') {
@@ -99,19 +104,27 @@ class PacienteController extends Controller
             $url = Storage::url($path);
         }
 
-        $paciente = Paciente::create([
-            'nome_completo' => $request->input('nome_completo'),
-            'nome_mae' => $request->input('nome_mae'),
-            'data_nascimento' => $request->input('data_nascimento'),
-            'cpf' => $cpf,
-            'cns' => $cns,
-            'endereco_id' => $endereco->id,
-            'foto_url' => $url ?? null,
-        ]);
+        try {
+            $paciente = new Paciente([
+                'nome_completo' => $request->input('nome_completo'),
+                'nome_mae' => $request->input('nome_mae'),
+                'data_nascimento' => $request->input('data_nascimento'),
+                'cpf' => $cpf,
+                'cns' => $cns,
+                'foto_url' => $url ?? null,
+            ]);
 
-        return response()->json([
-            'data' => $paciente,
-        ], 201);
+            $paciente->endereco()->associate($endereco);
+            $paciente->save();
+
+            return response()->json([
+                'data' => $paciente,
+            ], 201);
+        } catch (\Exception $e) {
+            DB::rollback();
+            $endereco->delete();
+            return response()->json(['error' => 'Erro ao criar paciente: ' . $e->getMessage()], 500);
+        }
     }
 
     /**
@@ -155,12 +168,11 @@ class PacienteController extends Controller
         }
 
         // Coloca a importação na fila
-        ProcessarImportacaoPacientes::dispatch($arquivo);
+        ProcessarImportacaoPacientes::dispatch($arquivo->getClientOriginalName());
 
         // Retorna uma mensagem de sucesso
         return response()->json(['message' => 'Importação de pacientes em andamento'], 202);
     }
-
 
     /**
      * Update the specified resource in storage.
@@ -177,32 +189,10 @@ class PacienteController extends Controller
             return response()->json(['message' => 'Paciente não encontrado'], 404);
         }
 
-        $request->validate([
+        $validation = Validator::make($request->all(), [
             'nome' => 'required|string|max:255',
             'nome_mae' => 'required|string|max:255',
             'data_nascimento' => 'required|date_format:Y-m-d',
-            'cpf' => [
-                'required',
-                'string',
-                'size:11',
-                Rule::unique('pacientes')->ignore($paciente->id),
-                function (Validator $validator, $value, $fail) {
-                    if (!$validator->validateCPF($value)) {
-                        $fail('O CPF informado é inválido.');
-                    }
-                }
-            ],
-            'cns' => [
-                'required',
-                'string',
-                'size:15',
-                Rule::unique('pacientes')->ignore($paciente->id),
-                function (Validator $validator, $value, $fail) {
-                    if (!$validator->validaCns($value) && !$validator->validaCnsProv($value)) {
-                        $fail('O CNS informado é inválido.');
-                    }
-                }
-            ],
             'foto' => 'nullable|image|max:2048',
             'cep' => 'required|string',
             'logradouro' => 'required|string',
@@ -213,42 +203,61 @@ class PacienteController extends Controller
             'estado' => 'required|string',
         ]);
 
-        DB::beginTransaction();
-
-        try {
-            $endereco = Endereco::firstOrCreate(
-                ['cep' => $request->cep],
-                [
-                    'endereco' => $request->endereco,
-                    'numero' => $request->numero,
-                    'complemento' => $request->complemento,
-                    'bairro' => $request->bairro,
-                    'cidade' => $request->cidade,
-                    'estado' => $request->estado,
-                ]
-            );
-
-            if ($request->hasFile('foto')) {
-                $path = $request->file('foto')->store('public');
-                $paciente->foto = $path;
-            }
-
-            $paciente->nome = $request->nome;
-            $paciente->nome_mae = $request->nome_mae;
-            $paciente->data_nascimento = $request->data_nascimento;
-            $paciente->cpf = $request->cpf;
-            $paciente->cns = $request->cns;
-            $paciente->endereco()->associate($endereco);
-            $paciente->save();
-
-            DB::commit();
-
-            return response()->json(['message' => 'Paciente atualizado com sucesso'], 200);
-        } catch (\Exception $e) {
-            DB::rollBack();
-
-            return response()->json(['message' => 'Ocorreu um erro ao atualizar o paciente: ' . $e->getMessage()], 500);
+        if ($validation->fails()) {
+            return response()->json($validation->errors(), 400);
         }
+
+        $endereco = Endereco::firstOrCreate(
+            ['cep' => $request->cep],
+            [
+                'endereco' => $request->logradouro,
+                'numero' => $request->numero,
+                'complemento' => $request->complemento,
+                'bairro' => $request->bairro,
+                'cidade' => $request->cidade,
+                'estado' => $request->estado,
+            ]
+        );
+
+        if ($request->hasFile('foto')) {
+            $path = $request->file('foto')->store('public');
+            $paciente->foto_url = $path;
+        }
+
+        $paciente->nome_completo = $request->nome;
+        $paciente->nome_mae = $request->nome_mae;
+        $paciente->data_nascimento = $request->data_nascimento;
+        $paciente->endereco()->associate($endereco);
+
+        if ($request->has('cpf') && $paciente->cpf !== $request->cpf) {
+            $exists = Paciente::where('cpf', $request->cpf)
+                ->where('id', '<>', $paciente->id)
+                ->exists();
+            if ($exists) {
+                return response()->json([
+                    'message' => 'CPF já cadastrado em outro paciente'
+                ], 400);
+            }
+            $paciente->cpf = $request->cpf;
+        }
+
+        if ($request->has('cns') && $paciente->cns !== $request->cns) {
+            $exists = Paciente::where('cns', $request->cns)
+                ->where('id', '<>', $paciente->id)
+                ->exists();
+            if ($exists) {
+                return response()->json([
+                    'message' => 'CNS já cadastrado em outro paciente'
+                ], 400);
+            }
+            $paciente->cns = $request->cns;
+        }
+
+        $paciente->save();
+
+        return response()->json([
+            'message' => 'Paciente atualizado com sucesso'
+        ], 200);
     }
 
     /**
